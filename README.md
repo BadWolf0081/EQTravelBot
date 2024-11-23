@@ -5,6 +5,8 @@ Usage Options:
 ```
 !zone ToZoneName (FromZoneName)
 ```
+NOTE: When more than one word is being used for the zone name you HAVE TO put the value in "'s 
+
 The From Zone Name is optional, it will assume Guild Hall if not provided.
 
 You can provide the name in Quotes if you have the full exact spelling including multiple words, or you can try to truncate into single words to see if the bot will recognize, sometimes it does.
