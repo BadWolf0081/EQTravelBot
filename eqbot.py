@@ -3,6 +3,7 @@ from discord.ext import commands
 import json
 import logging
 from collections import deque
+from rapidfuzz import process, fuzz
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -27,6 +28,15 @@ def preprocess_zones(zones):
         if zone not in zones:
             logger.debug(f"Adding placeholder for missing zone: {zone}")
             zones[zone] = {"connections": []}
+
+# Preprocess aliases for better fuzzy matching
+def preprocess_zones_with_aliases(zones):
+    """Add aliases for zones with compound names to improve fuzzy matching."""
+    aliases = {}
+    for zone in zones.keys():
+        base_name = zone.split(",")[0].strip()  # Use the first part of the name
+        aliases[base_name.lower()] = zone
+    return aliases
 
 # Find the shortest route between two zones
 def find_shortest_route(start, end, zones):
@@ -89,7 +99,7 @@ def format_route(route):
         if i == 0:  # Skip the starting zone
             continue
 
-        connection_text = f"{indent * (i - 1)}• Travel to {step['name']}"
+        connection_text = f"{indent * (i - 1)}\u2022 Travel to {step['name']}"
 
         # Add Guild Hall item/stone or Laurion Inn door information
         if step.get("method"):
@@ -109,8 +119,27 @@ def format_route(route):
         formatted_route.append(connection_text)
 
     # Add final arrival message
-    formatted_route.append(f"{indent * len(route)}• Arrived at {route[-1]['name']}!")
+    formatted_route.append(f"{indent * len(route)}\u2022 Arrived at {route[-1]['name']}!")
     return "\n".join(formatted_route)
+
+# Match zone names using fuzzy matching
+def match_zone_name(zone_name, zones, zone_aliases):
+    """Match a zone name using fuzzy matching with aliases."""
+    zone_list = list(zone_aliases.keys())
+    logger.debug(f"Fuzzy matching for '{zone_name}' against: {zone_list}")
+    matches = process.extract(zone_name.lower(), zone_list, scorer=fuzz.ratio, limit=5)
+    logger.debug(f"Matches found: {matches}")
+
+    if not matches:
+        raise ValueError(f"No matches found for '{zone_name}'")
+
+    best_match = matches[0][0]  # First element is the match
+    score = matches[0][1]  # Second element is the score
+    if score >= 50:  # Lower threshold for fuzzy match acceptance
+        return zone_aliases[best_match]
+    else:
+        potential_matches = [zone_aliases[match[0]] for match in matches if match[1] >= 30]
+        raise ValueError(f"No sufficiently close matches found for '{zone_name}'. Did you mean: {', '.join(potential_matches)}?")
 
 # Initialize the bot
 intents = discord.Intents.default()
@@ -119,6 +148,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Load zone data
 zones = load_zones("zones.json")
+zone_aliases = preprocess_zones_with_aliases(zones)
 preprocess_zones(zones)
 
 # Zone command
@@ -128,21 +158,9 @@ async def zone_command(ctx, zone1: str, zone2: str = "Guild Hall"):
     start_zone = zone2
     end_zone = zone1
 
-    # Match zone names
-    def match_zone_name(zone_name, zones):
-        """Match a zone name with partial or initial input."""
-        zone_list = list(zones.keys())
-        matches = [z for z in zone_list if z.lower().startswith(zone_name.lower())]
-        if len(matches) == 1:
-            return matches[0]
-        elif len(matches) > 1:
-            raise ValueError(f"Ambiguous matches for '{zone_name}': {matches}")
-        else:
-            raise ValueError(f"No matches found for {zone_name}")
-
     try:
-        matched_zone1 = match_zone_name(zone1, zones)
-        matched_zone2 = match_zone_name(zone2, zones)
+        matched_zone1 = match_zone_name(zone1, zones, zone_aliases)
+        matched_zone2 = match_zone_name(zone2, zones, zone_aliases)
     except ValueError as e:
         await ctx.send(str(e))
         return
