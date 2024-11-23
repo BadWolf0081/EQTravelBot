@@ -1,0 +1,15 @@
+# Core requirements for the bot
+discord.py==2.4.1
+rapidfuzz==2.13.0
+
+# Core requirements for the Flask website
+Flask==3.0.0
+
+# Additional requirements for data processing and handling
+jsonschema==4.19.0  # For validating JSON if needed
+
+# Frontend rendering (optional, for full-stack testing)
+gunicorn==21.1.0    # Production WSGI server for Flask (optional for development)
+
+# Development and debugging
+flask-debugtoolbar==0.13.1  # For debugging Flask applications
