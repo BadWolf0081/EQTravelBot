@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EverQuest Route Finder</title>
+    <link rel="stylesheet" href="/static/style.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap');
+
+        html, body {
+            font-family: 'MedievalSharp', serif;
+            background: url('/static/Background.webp') no-repeat center center fixed;
+            background-size: cover;
+            color: #f8f8f2;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; /* Ensure the body fills the viewport */
+        }
+
+        main {
+            flex: 1; /* Push footer to the bottom */
+        }
+
+        h1, h2 {
+            text-align: center;
+            color: #ffcc00;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        form {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        label {
+            display: block;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            color: #ffcc00;
+        }
+
+        input[type="text"], button {
+            display: block;
+            width: 90%;
+            margin: 10px auto;
+            padding: 10px;
+            font-size: 1.1rem;
+            border-radius: 10px;
+            border: 1px solid #aaa;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        input[type="text"] {
+            background-color: rgba(255, 255, 255, 0.9);
+            color: #000;
+        }
+
+        .autocomplete-list {
+            position: absolute;
+            background-color: #333;
+            color: #fff;
+            z-index: 99;
+            width: 90%;
+            max-height: 225px;
+            overflow-y: auto;
+            margin: 0 auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+
+        .autocomplete-list div {
+            padding: 10px;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+
+        .autocomplete-list div:hover {
+            background-color: #444;
+        }
+
+        button {
+            background-color: #ffcc00;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+
+        button:hover {
+            background-color: #ffdd33;
+            box-shadow: 0 0 10px rgba(255, 255, 0, 0.7);
+        }
+
+        pre {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            color: #fff;
+            font-size: 1.1rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        p, .error-message {
+            text-align: center;
+            font-size: 1.1rem;
+            color: #ffcc00;
+        }
+
+        footer {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            text-align: center;
+            font-size: 1rem;
+            color: #ffcc00;
+            text-shadow: 1px 1px 2px #000;
+            border-top: 1px solid #444;
+        }
+
+        footer a {
+            color: #ffcc00;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <form method="POST">
+            <h1>EverQuest Route Finder</h1>
+            <label for="from_zone">From Zone: (Optional)</label>
+            <input type="text" id="from_zone" name="from_zone" placeholder="Guild Hall" value="{{ request.form.get('from_zone', '') }}" autocomplete="off">
+            <div id="from_zone_autocomplete" class="autocomplete-list"></div>
+
+            <label for="to_zone">To Zone:</label>
+            <input type="text" id="to_zone" name="to_zone" placeholder="Enter destination" value="{{ request.form.get('to_zone', '') }}" autocomplete="off">
+            <div id="to_zone_autocomplete" class="autocomplete-list"></div>
+
+            <div class="button-container">
+                <button type="submit">Find Route</button>
+            </div>
+
+            {% if result %}
+                <h2>Result:</h2>
+                <pre>{{ result }}</pre>
+            {% endif %}
+
+            {% if error %}
+                <h2>Error:</h2>
+                <p class="error-message">{{ error }}</p>
+            {% endif %}
+        </form>
+    </main>
+
+    <footer>
+        Powered by <strong>RGIT</strong> | Built by <strong>BadWolf aka Ginkgo on Povar</strong>
+    </footer>
+
+    <script>
+        const allZones = {{ all_zones | safe }};
+        const fromZoneInput = document.getElementById("from_zone");
+        const toZoneInput = document.getElementById("to_zone");
+        const fromAutocompleteList = document.getElementById("from_zone_autocomplete");
+        const toAutocompleteList = document.getElementById("to_zone_autocomplete");
+
+        function setupAutocomplete(inputField, autocompleteList) {
+            inputField.addEventListener("input", function () {
+                const value = this.value.toLowerCase();
+                autocompleteList.innerHTML = "";
+                if (!value) return;
+
+                const matches = allZones.filter(zone => zone.toLowerCase().includes(value));
+                matches.forEach(match => {
+                    const item = document.createElement("div");
+                    item.textContent = match;
+                    item.addEventListener("click", () => {
+                        inputField.value = match;
+                        autocompleteList.innerHTML = "";
+                    });
+                    autocompleteList.appendChild(item);
+                });
+            });
+
+            document.addEventListener("click", function (e) {
+                if (!autocompleteList.contains(e.target) && e.target !== inputField) {
+                    autocompleteList.innerHTML = "";
+                }
+            });
+        }
+
+        setupAutocomplete(fromZoneInput, fromAutocompleteList);
+        setupAutocomplete(toZoneInput, toAutocompleteList);
+    </script>
+</body>
+</html>
