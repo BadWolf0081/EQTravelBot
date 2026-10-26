@@ -24,6 +24,21 @@ def preprocess_zones(zones):
         if zone not in zones:
             zones[zone] = {"connections": []}
 
+# Ensure every connection carries the "buy_handin" and "gh_item" flags.
+# Missing flags are inferred from the legacy "stone"/"item" keys.
+def normalize_connection_flags(zones):
+    for zone_data in zones.values():
+        for connection in zone_data.get("connections", []):
+            connection.setdefault("buy_handin", bool(connection.get("stone")))
+            connection.setdefault("gh_item", bool(connection.get("item")))
+
+def connection_allowed(connection, use_buy_handin, use_gh_items):
+    if connection.get("buy_handin") and not use_buy_handin:
+        return False
+    if connection.get("gh_item") and not use_gh_items:
+        return False
+    return True
+
 # Preprocess aliases for fuzzy matching
 def preprocess_zone_aliases(zones):
     aliases = {}
@@ -45,7 +60,7 @@ def match_zone_name(zone_name, zones, zone_aliases):
         raise ValueError(f"No sufficiently close matches found for '{zone_name}'.")
 
 # Find the shortest route and count the routes checked
-def find_shortest_route_and_count(start, end, zones):
+def find_shortest_route_and_count(start, end, zones, use_buy_handin=True, use_gh_items=True):
     queue = deque([(start, [start])])
     visited = set()
     total_routes_checked = 0
@@ -62,6 +77,8 @@ def find_shortest_route_and_count(start, end, zones):
 
         connections = zones.get(current_zone, {}).get("connections", [])
         for connection in connections:
+            if not connection_allowed(connection, use_buy_handin, use_gh_items):
+                continue
             if current_zone == "Guild Lobby" and connection["name"] in ["Guild Hall", "Plane of Knowledge"]:
                 queue.appendleft((connection["name"], path + [connection["name"]]))
             elif connection["direction"] in ["both", "exit"] and connection["name"] not in visited:
@@ -105,6 +122,9 @@ def format_route(route, from_zone, to_zone, total_routes_checked):
                 item_name = step['method'].split('(')[1].split(')')[0]
                 description = step.get("description", "Description not found")
                 connection_text += f" using '{item_name}' ({description})."
+            elif "Guild Hall Stone" in step["method"]:
+                stone_name = step['method'].split('(')[1].split(')')[0]
+                connection_text += f" using '{stone_name}'. Give the stone to Zeflmin Werlikanin."
         formatted_route.append(connection_text)
     formatted_route.append(f"{indent * len(route)}• Arrived at {route[-1]['name']}!")
     return summary + "\n".join(formatted_route)
@@ -112,6 +132,7 @@ def format_route(route, from_zone, to_zone, total_routes_checked):
 # Load and preprocess zones
 zones = load_zones("zones.json")
 preprocess_zones(zones)
+normalize_connection_flags(zones)
 zone_aliases = preprocess_zone_aliases(zones)
 all_zones = list(zones.keys())
 
@@ -120,8 +141,12 @@ all_zones = list(zones.keys())
 def index():
     result = None
     error = None
+    use_buy_handin = True
+    use_gh_items = True
 
     if request.method == "POST":
+        use_buy_handin = request.form.get("use_buy_handin") == "on"
+        use_gh_items = request.form.get("use_gh_items") == "on"
         to_zone = request.form.get("to_zone", "").strip()
         from_zone = request.form.get("from_zone", "Guild Hall").strip()
 
@@ -135,7 +160,7 @@ def index():
             matched_from_zone = match_zone_name(from_zone, zones, zone_aliases)
             matched_to_zone = match_zone_name(to_zone, zones, zone_aliases)
 
-            route, total_routes_checked = find_shortest_route_and_count(matched_from_zone, matched_to_zone, zones)
+            route, total_routes_checked = find_shortest_route_and_count(matched_from_zone,             matched_to_zone, zones, use_buy_handin, use_gh_items)
             if not route:
                 error = f"No path found from {matched_from_zone} to {matched_to_zone}!"
             else:
@@ -144,7 +169,8 @@ def index():
         except ValueError as e:
             error = str(e)
 
-    return render_template("index.html", result=result, error=error, all_zones=all_zones)
+    return render_template("index.html", result=result, error=error, all_zones=all_zones,
+                           use_buy_handin=use_buy_handin, use_gh_items=use_gh_items)
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

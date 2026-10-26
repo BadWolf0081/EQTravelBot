@@ -48,6 +48,9 @@
             color: #ffcc00;
         }
 
+        label.toggle { font-size: 1rem; cursor: pointer; }
+        label.toggle input { margin-right: 8px; }
+
         input[type="text"], button {
             display: block;
             width: 90%;
@@ -149,6 +152,9 @@
             <label for="to_zone">To Zone:</label>
             <input type="text" id="to_zone" name="to_zone" placeholder="Enter destination" value="{{ request.form.get('to_zone', '') }}" autocomplete="off">
             <div id="to_zone_autocomplete" class="autocomplete-list"></div>
+
+            <label class="toggle"><input type="checkbox" name="use_gh_items" {% if use_gh_items %}checked{% endif %}> Use Guild Hall teleport items</label>
+            <label class="toggle"><input type="checkbox" name="use_buy_handin" {% if use_buy_handin %}checked{% endif %}> Use Guild Hall paths that require buying an item and handing it in</label>
 
             <div class="button-container">
                 <button type="submit">Find Route</button>
